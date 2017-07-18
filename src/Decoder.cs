@@ -29,12 +29,11 @@ namespace lzo.net
         private readonly Stream _input;
         private readonly Stream _output;
         private readonly int _bufferSize;
+        private readonly long _inputLength;
+        private long _inputPosition;
+        private const int MaxWindowSize = (1 << 14) + ((255 & 8) << 11) + (255 << 6) + (255 >> 2);
 
-        public Lzo1xDecoder(Stream input, Stream output)
-        {
-            
-        }
-        public Lzo1xDecoder(Stream input, Stream output, int maxBufferSize)
+        public Lzo1xDecoder(Stream input, Stream output, int maxBufferSize = 4*1024)
         {
             if (!output.CanWrite)
                 throw new ArgumentException("output stream cannot be readonly", nameof(output));
@@ -43,6 +42,8 @@ namespace lzo.net
             if (maxBufferSize <= 0)
                 throw new ArgumentException("buffer cannot be negative or empty", nameof(maxBufferSize));
             _input = input;
+            _inputLength = _input.Length;
+            _inputPosition = _input.Position;
             _output = output;
             _bufferSize = maxBufferSize;
         }
@@ -113,6 +114,7 @@ namespace lzo.net
         private byte GetByte()
         {
             var result = _input.ReadByte();
+            _inputPosition++;
             if (result == -1)
                 throw new EndOfStreamException();
             return (byte) result;
@@ -120,9 +122,12 @@ namespace lzo.net
 
         private void Copy(int count)
         {
-            if (count < _input.Length-_input.Position)
+            if (count > _inputLength-_inputPosition)
                 throw new EndOfStreamException();
-            var buffer = new byte[_bufferSize];
+            var size = _bufferSize;
+            if (size > count)
+                size = count;
+            var buffer = new byte[size];
 
             while (count > 0)
             {
@@ -130,6 +135,7 @@ namespace lzo.net
                 if (read == 0)
                     throw new EndOfStreamException();
                 _output.Write(buffer, 0, read);
+                _inputPosition += read;
                 count -= read;
             }
         }
@@ -151,19 +157,27 @@ namespace lzo.net
             }
             return cnt;
         }
-
+        
         private void copy_backptr(int back, int cnt)
         {
+            var size = _bufferSize;
+            if (size > cnt)
+                size = cnt;
             if (cnt > back)
-                throw new NotImplementedException();
-            var buffer = new byte[_bufferSize];
+            {
+                size = back;
+            }
+            var buffer = new byte[size];
             while (cnt > 0)
             {
                 _output.Position -= back;
-                var read = _output.Read(buffer, 0, Math.Min(cnt, buffer.Length));
+                var count = buffer.Length;
+                if (cnt < count)
+                    count = cnt;
+                var read = _output.Read(buffer, 0, count);
                 if (read == 0)
                     throw new EndOfStreamException();
-                _output.Position += back;
+                _output.Position += back - read;
                 _output.Write(buffer, 0, read);
                 cnt -= read;
             }

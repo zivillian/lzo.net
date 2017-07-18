@@ -5,6 +5,8 @@ VisualStudioVersion = 15.0.26430.16
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "lzo.net", "src\lzo.net.csproj", "{1F72253F-E907-4E94-AD9A-150FD4350BF7}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "lzo.net.test", "test\lzo.net.test.csproj", "{B8DBC3D0-8610-4530-BC3D-E87323F90FE6}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -15,6 +17,10 @@ Global
 		{1F72253F-E907-4E94-AD9A-150FD4350BF7}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{1F72253F-E907-4E94-AD9A-150FD4350BF7}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{1F72253F-E907-4E94-AD9A-150FD4350BF7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B8DBC3D0-8610-4530-BC3D-E87323F90FE6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B8DBC3D0-8610-4530-BC3D-E87323F90FE6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B8DBC3D0-8610-4530-BC3D-E87323F90FE6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B8DBC3D0-8610-4530-BC3D-E87323F90FE6}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
