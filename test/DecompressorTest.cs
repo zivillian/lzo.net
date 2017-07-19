@@ -80,5 +80,12 @@ namespace lzo.net.test
             sw.Stop();
             _output.WriteLine($"Took {sw.ElapsedMilliseconds}ms");
         }
+
+        [Fact]
+        public void LargeFileTest()
+        {
+            var enwik8 = "a1fa5ffddb56f4953e226637dabbb36a";
+            ValidateFile(@"..\..\..\data\enwik8.lzo", enwik8);
+        }
     }
 }

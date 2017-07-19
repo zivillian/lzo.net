@@ -32,6 +32,7 @@ namespace lzo.net
         private readonly long _inputLength;
         private long _inputPosition;
         private const int MaxWindowSize = (1 << 14) + ((255 & 8) << 11) + (255 << 6) + (255 >> 2);
+        private readonly RingBuffer _window = new RingBuffer(MaxWindowSize);
 
         public Lzo1xDecoder(Stream input, Stream output, int maxBufferSize = 4*1024)
         {
@@ -47,7 +48,7 @@ namespace lzo.net
             _output = output;
             _bufferSize = maxBufferSize;
         }
-
+        
         public void Decode()
         {
             int state = 0;
@@ -134,10 +135,16 @@ namespace lzo.net
                 var read = _input.Read(buffer, 0, Math.Min(count, buffer.Length));
                 if (read == 0)
                     throw new EndOfStreamException();
-                _output.Write(buffer, 0, read);
+                WriteOutput(buffer, read);
                 _inputPosition += read;
                 count -= read;
             }
+        }
+
+        private void WriteOutput(byte[] buffer, int read)
+        {
+            _window.Write(buffer, 0, read);
+            _output.Write(buffer, 0, read);
         }
 
         private int get_len(int x, int mask)
@@ -170,15 +177,15 @@ namespace lzo.net
             var buffer = new byte[size];
             while (cnt > 0)
             {
-                _output.Position -= back;
+                _window.Position -= back;
                 var count = buffer.Length;
                 if (cnt < count)
                     count = cnt;
-                var read = _output.Read(buffer, 0, count);
+                var read = _window.Read(buffer, 0, count);
                 if (read == 0)
                     throw new EndOfStreamException();
-                _output.Position += back - read;
-                _output.Write(buffer, 0, read);
+                _window.Position += back - read;
+                WriteOutput(buffer, read);
                 cnt -= read;
             }
         }
