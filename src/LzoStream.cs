@@ -18,7 +18,6 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -37,6 +36,7 @@ namespace lzo.net
         private byte[] _decoded;
         private const int MaxWindowSize = (1 << 14) + ((255 & 8) << 11) + (255 << 6) + (255 >> 2);
         private readonly RingBuffer _window = new RingBuffer(MaxWindowSize);
+        private long _position;
 
         public LzoStream(Stream stream, CompressionMode mode)
         {
@@ -122,7 +122,7 @@ namespace lzo.net
                 _x = GetByte();
                 if (_x > 15)
                 {
-                    Position += _decoded.Length;
+                    _position += _decoded.Length;
                     return true;
                 }
                 cnt = 1;
@@ -141,7 +141,7 @@ namespace lzo.net
                 Append(data);
             }
             _x = GetByte();
-            Position += _decoded.Length;
+            _position += _decoded.Length;
             return true;
         }
 
@@ -179,11 +179,26 @@ namespace lzo.net
         private void copy_backptr(int back, int cnt)
         {
             var size = cnt;
+            byte[] buffer;
             if (cnt > back)
             {
-                size = back;
+                size = cnt % back;
+                buffer = new byte[back];
+                _window.Position -= back;
+                var read = _window.Read(buffer, 0, buffer.Length);
+                if (read == 0)
+                    throw new EndOfStreamException();
+                Debug.Assert(read == buffer.Length);
+                _window.Position += back - read;
+                var copies = cnt / back;
+                for (int i = 0; i < copies; i++)
+                {
+                    _window.Write(buffer, 0, read);
+                    Append(buffer);
+                    cnt -= read;
+                }
             }
-            var buffer = new byte[size];
+            buffer = new byte[size];
             while (cnt > 0)
             {
                 _window.Position -= back;
@@ -218,7 +233,11 @@ namespace lzo.net
             }
         }
 
-        public override long Position { get; set; }
+        public override long Position
+        {
+            get { return _position; }
+            set { _position = value; }
+        }
 
         public override void Flush()
         {
@@ -227,7 +246,7 @@ namespace lzo.net
 
         public override int Read(byte[] buffer, int offset, int count)
         {
-            if (_length.HasValue && Position >= _length)
+            if (_length.HasValue && _position >= _length)
                 return 0;
             var result = 0;
             while (count > 0)
@@ -244,7 +263,7 @@ namespace lzo.net
 
         private int ReadInternal(byte[] buffer, int offset, int count)
         {
-            if (_length.HasValue && Position >= _length)
+            if (_length.HasValue && _position >= _length)
                 return -1;
             var read = 0;
             if (_decoded != null)
@@ -273,7 +292,7 @@ namespace lzo.net
             }
             if (!Decode())
             {
-                _length = Position;
+                _length = _position;
                 if (read != 0)
                     return read;
                 return -1;
