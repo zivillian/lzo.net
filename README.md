@@ -1,3 +1,5 @@
+[![Build status](https://ci.appveyor.com/api/projects/status/bboaj84n93k6q733?svg=true)](https://ci.appveyor.com/project/zivillian/lzo-net) [![Nuget version](https://img.shields.io/nuget/v/lzo.net.svg)](https://www.nuget.org/packages/lzo.net)
+
 # lzo.net
 
 This is an implementation of the [lzo](https://www.oberhumer.com/opensource/lzo/) decoder in plain c#/.NET (wihtout P/Invoke, `fixed` or `unchecked`).
@@ -13,6 +15,8 @@ Currently only decompression is supported.
 The early versions contain a port from ffmpeg, which is licensed under LGPL v2.1. Later version do not contain any LGPL code anymore, so the license was switched to MIT. Details can be found in the LICENSE file for each version.
 
 ## Usage
+
+Install from [nuget](https://www.nuget.org/packages/lzo.net).
 
 ```csharp
 using (var compressed = File.OpenRead("File.lzo"))
