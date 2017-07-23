@@ -28,44 +28,51 @@ namespace lzo.net
     {
         private readonly byte[] _buffer;
         private int _position;
+        private readonly int _size;
 
         public RingBuffer(int size)
         {
             _buffer = new byte[size];
+            _size = size;
         }
 
-        public int Position
+        public void Seek(int offset)
         {
-            get { return _position; }
-            set
+            _position += offset;
+            if (_position > _size)
             {
-                var bufferLength = _buffer.Length;
-                _position = (value + bufferLength);
-                if (_position >= bufferLength)
-                    _position %= bufferLength;
+                _position %= _size;
+                return;
             }
-        }
-
-        private int Remaining
-        {
-            get { return _buffer.Length - _position; }
+            while (_position < 0)
+            {
+                _position += _size;
+            }
         }
 
         public int Read(byte[] buffer, int offset, int count)
         {
+            if (count == 0) return 0;
             var cnt = count;
+            if (count < 10 && (_position + count) < _size)
+            {
+                do
+                {
+                    buffer[offset++] = _buffer[_position++];
+                } while (--cnt > 0);
+                return count;
+            }
             while (cnt > 0)
             {
-                var bufferLength = _buffer.Length;
-                var copy = bufferLength - _position;
+                var copy = _size - _position;
                 if (copy > cnt)
                 {
                     copy = cnt;
                 }
                 Buffer.BlockCopy(_buffer, _position, buffer, offset, copy);
                 _position = (_position + copy);
-                if (_position >= bufferLength)
-                    _position %= bufferLength;
+                if (_position >= _size)
+                    _position %= _size;
                 cnt -= copy;
                 offset += copy;
             }
@@ -74,16 +81,24 @@ namespace lzo.net
 
         public void Write(byte[] buffer, int offset, int count)
         {
-            while (count > 0)
+            if (count == 0) return;
+            if (count < 10 && (_position + count) < _size)
             {
-                var bufferLength = _buffer.Length;
-                var cnt = bufferLength - _position;
+                do
+                {
+                    _buffer[_position++] = buffer[offset++];
+                } while (--count > 0);
+            }
+            else
+                while (count > 0)
+            {
+                var cnt = _size - _position;
                 if (cnt > count)
                     cnt = count;
                 Buffer.BlockCopy(buffer, offset, _buffer, _position, cnt);
                 _position = (_position + cnt);
-                if (_position >= bufferLength)
-                    _position %= bufferLength;
+                if (_position >= _size)
+                    _position %= _size;
                 offset += cnt;
                 count -= cnt;
             }

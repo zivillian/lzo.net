@@ -177,14 +177,14 @@ namespace lzo.net
             var buffer = new byte[size];
             while (cnt > 0)
             {
-                _window.Position -= back;
+                _window.Seek(-back);
                 var count = buffer.Length;
                 if (cnt < count)
                     count = cnt;
                 var read = _window.Read(buffer, 0, count);
                 if (read == 0)
                     throw new EndOfStreamException();
-                _window.Position += back - read;
+                _window.Seek(back - read);
                 WriteOutput(buffer, read);
                 cnt -= read;
             }

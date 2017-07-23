@@ -184,12 +184,12 @@ namespace lzo.net
             {
                 size = cnt % back;
                 buffer = new byte[back];
-                _window.Position -= back;
+                _window.Seek(-back);
                 var read = _window.Read(buffer, 0, buffer.Length);
                 if (read == 0)
                     throw new EndOfStreamException();
                 Debug.Assert(read == buffer.Length);
-                _window.Position += back - read;
+                _window.Seek(back - read);
                 var copies = cnt / back;
                 for (int i = 0; i < copies; i++)
                 {
@@ -201,13 +201,13 @@ namespace lzo.net
             buffer = new byte[size];
             while (cnt > 0)
             {
-                _window.Position -= back;
+                _window.Seek(-back);
                 if (cnt < buffer.Length)
                     buffer = new byte[cnt];
                 var read = _window.Read(buffer, 0, buffer.Length);
                 if (read == 0)
                     throw new EndOfStreamException();
-                _window.Position += back - read;
+                _window.Seek(back - read);
                 _window.Write(buffer, 0, read);
                 Append(buffer);
                 cnt -= read;

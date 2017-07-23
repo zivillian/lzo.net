@@ -298,12 +298,12 @@ namespace lzo.net
             if (count > distance)
             {
                 size = distance;
-                _window.Position -= distance;
+                _window.Seek(-distance);
                 var read = _window.Read(result, offset, size);
                 if (read == 0)
                     throw new EndOfStreamException();
                 Debug.Assert(read == size);
-                _window.Position += distance - read;
+                _window.Seek(distance - read);
                 _window.Write(result, offset, read);
                 count -= read;
                 var copies = count / distance;
@@ -318,13 +318,13 @@ namespace lzo.net
             }
             while (count > 0)
             {
-                _window.Position -= distance;
+                _window.Seek(-distance);
                 if (count < size)
                     size = count;
                 var read = _window.Read(result, offset, size);
                 if (read == 0)
                     throw new EndOfStreamException();
-                _window.Position += distance - read;
+                _window.Seek(distance - read);
                 _window.Write(result, offset, read);
                 offset += read;
                 count -= read;
