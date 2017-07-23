@@ -68,43 +68,11 @@ namespace lzo.net.test
             var sw = new Stopwatch();
             sw.Start();
             var md5 = MD5.Create();
-            long position;
-            using (var file = File.OpenRead(filename))
-            using (var ms = new MemoryStream())
-            {
-                var decoder = new Lzo1xDecoder(file, ms);
-                decoder.Decode();
-                position = ms.Position;
-                ms.Seek(0, SeekOrigin.Begin);
-                var hash = md5.ComputeHash(ms);
-                var hex = BitConverter.ToString(hash).Replace("-", String.Empty).ToLowerInvariant();
-                Assert.Equal(checksum, hex);
-            }
-            sw.Stop();
-            _output.WriteLine($"Decode took {sw.ElapsedMilliseconds}ms");
-            sw.Restart();
-
-            using (var file = File.OpenRead(filename))
-            using (var ms = new MemoryStream())
-            using (var lzo = new LzoStream(file, CompressionMode.Decompress))
-            {
-                lzo.CopyTo(ms);
-                Assert.Equal(position, ms.Position);
-                ms.Seek(0, SeekOrigin.Begin);
-                var hash = md5.ComputeHash(ms);
-                var hex = BitConverter.ToString(hash).Replace("-", String.Empty).ToLowerInvariant();
-                Assert.Equal(checksum, hex);
-            }
-            sw.Stop();
-            _output.WriteLine($"LzoStream took {sw.ElapsedMilliseconds}ms");
-            sw.Restart();
-
             using (var file = File.OpenRead(filename))
             using (var ms = new MemoryStream())
             using (var lzo = new BetterLzoStream(file, CompressionMode.Decompress))
             {
                 lzo.CopyTo(ms);
-                Assert.Equal(position, ms.Position);
                 ms.Seek(0, SeekOrigin.Begin);
                 var hash = md5.ComputeHash(ms);
                 var hex = BitConverter.ToString(hash).Replace("-", String.Empty).ToLowerInvariant();
