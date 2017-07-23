@@ -93,22 +93,20 @@ namespace lzo.net
             return (byte)result;
         }
 
-        private byte[] Copy(int count)
+        private void Copy(byte[] buffer, int offset, int count)
         {
             if (count > _inputLength - _inputPosition)
                 throw new EndOfStreamException();
-            var buffer = new byte[count];
-
             while (count > 0)
             {
-                var read = _base.Read(buffer, 0, buffer.Length);
+                var read = _base.Read(buffer, offset, count);
                 if (read == 0)
                     throw new EndOfStreamException();
-                _window.Write(buffer, 0, read);
+                _window.Write(buffer, offset, read);
                 _inputPosition += read;
+                offset += read;
                 count -= read;
             }
-            return buffer;
         }
 
         private bool Decode()
@@ -141,7 +139,8 @@ namespace lzo.net
                         {
                             count += 15 + ReadLength();
                         }
-                        _decoded = Copy(count);
+                        _decoded = new byte[count];
+                        Copy(_decoded, 0, count);
                         _lzoState = LzoState.LargeCopy;
                         break;
                     case LzoState.SmallCopy1:
@@ -276,19 +275,6 @@ namespace lzo.net
             return true;
         }
 
-        private void Append(byte[] data)
-        {
-            if (_decoded == null)
-            {
-                _decoded = data;
-                return;
-            }
-            var result = new byte[_decoded.Length + data.Length];
-            Buffer.BlockCopy(_decoded, 0, result, 0, _decoded.Length);
-            Buffer.BlockCopy(data, 0, result, _decoded.Length, data.Length);
-            _decoded = result;
-        }
-
         private int ReadLength()
         {
             byte b;
@@ -306,42 +292,48 @@ namespace lzo.net
 
         private void CopyFromRingBuffer(int distance, int count, int state)
         {
+            var result = new byte[count + state];
+            var offset = 0;
             var size = count;
-            byte[] buffer;
             if (count > distance)
             {
-                size = count % distance;
-                buffer = new byte[distance];
+                size = distance;
                 _window.Position -= distance;
-                var read = _window.Read(buffer, 0, buffer.Length);
+                var read = _window.Read(result, offset, size);
                 if (read == 0)
                     throw new EndOfStreamException();
-                Debug.Assert(read == buffer.Length);
+                Debug.Assert(read == size);
                 _window.Position += distance - read;
+                _window.Write(result, offset, read);
+                count -= read;
                 var copies = count / distance;
                 for (int i = 0; i < copies; i++)
                 {
-                    _window.Write(buffer, 0, read);
-                    Append(buffer);
+                    _window.Write(result, offset, read);
+                    Buffer.BlockCopy(result, offset, result, offset + read, read);
+                    offset += read;
                     count -= read;
                 }
+                offset += read;
             }
-            buffer = new byte[size];
             while (count > 0)
             {
                 _window.Position -= distance;
-                if (count < buffer.Length)
-                    buffer = new byte[count];
-                var read = _window.Read(buffer, 0, buffer.Length);
+                if (count < size)
+                    size = count;
+                var read = _window.Read(result, offset, size);
                 if (read == 0)
                     throw new EndOfStreamException();
                 _window.Position += distance - read;
-                _window.Write(buffer, 0, read);
-                Append(buffer);
+                _window.Write(result, offset, read);
+                offset += read;
                 count -= read;
             }
             if (state > 0)
-                Append(Copy(state));
+            {
+                Copy(result, offset, state);
+            }
+            _decoded = result;
             _lzoState = (LzoState)state;
         }
 
