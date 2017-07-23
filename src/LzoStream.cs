@@ -35,6 +35,7 @@ namespace lzo.net
         private readonly Stream _base;
         private long? _length;
         private long _inputPosition;
+        private readonly bool _leaveOpen;
         private readonly long _inputLength;
         private byte[] _decoded;
         private const int MaxWindowSize = (1 << 14) + ((255 & 8) << 11) + (255 << 6) + (255 >> 2);
@@ -73,6 +74,15 @@ namespace lzo.net
         /// <param name="stream">the compressed stream</param>
         /// <param name="mode">currently only decompression is supported</param>
         public LzoStream(Stream stream, CompressionMode mode)
+            :this(stream, mode, false) {}
+
+        /// <summary>
+        /// creates a new lzo stream for decompression
+        /// </summary>
+        /// <param name="stream">the compressed stream</param>
+        /// <param name="mode">currently only decompression is supported</param>
+        /// <param name="leaveOpen">true to leave the stream open after disposing the LzoStream object; otherwise, false</param>
+        public LzoStream(Stream stream, CompressionMode mode, bool leaveOpen)
         {
             if (mode != CompressionMode.Decompress)
                 throw new NotSupportedException("Compression is not supported");
@@ -80,6 +90,7 @@ namespace lzo.net
                 throw new ArgumentException("write-only stream cannot be used for decompression");
             _base = stream;
             _inputLength = _base.Length;
+            _leaveOpen = leaveOpen;
             DecodeFirstByte();
         }
 
@@ -457,6 +468,13 @@ namespace lzo.net
         public override void Write(byte[] buffer, int offset, int count)
         {
             throw new InvalidOperationException("cannot write to readonly stream");
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (!_leaveOpen)
+                _base.Dispose();
+            base.Dispose(disposing);
         }
 
         #endregion
