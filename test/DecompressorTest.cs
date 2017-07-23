@@ -70,7 +70,7 @@ namespace lzo.net.test
             var md5 = MD5.Create();
             using (var file = File.OpenRead(filename))
             using (var ms = new MemoryStream())
-            using (var lzo = new BetterLzoStream(file, CompressionMode.Decompress))
+            using (var lzo = new LzoStream(file, CompressionMode.Decompress))
             {
                 lzo.CopyTo(ms);
                 ms.Seek(0, SeekOrigin.Begin);
@@ -79,7 +79,7 @@ namespace lzo.net.test
                 Assert.Equal(checksum, hex);
             }
             sw.Stop();
-            _output.WriteLine($"BetterLzoStream took {sw.ElapsedMilliseconds}ms");
+            _output.WriteLine($"LzoStream took {sw.ElapsedMilliseconds}ms");
         }
         
         [Fact]

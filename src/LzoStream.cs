@@ -30,7 +30,7 @@ namespace lzo.net
     /// <summary>
     /// Wrapper Stream for lzo compression
     /// </summary>
-    public class BetterLzoStream:Stream
+    public class LzoStream:Stream
     {
         private readonly Stream _base;
         private long? _length;
@@ -72,7 +72,7 @@ namespace lzo.net
         /// </summary>
         /// <param name="stream">the compressed stream</param>
         /// <param name="mode">currently only decompression is supported</param>
-        public BetterLzoStream(Stream stream, CompressionMode mode)
+        public LzoStream(Stream stream, CompressionMode mode)
         {
             if (mode != CompressionMode.Decompress)
                 throw new NotSupportedException("Compression is not supported");
