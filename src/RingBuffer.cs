@@ -24,18 +24,30 @@ using System;
 
 namespace lzo.net
 {
+    /// <summary>
+    /// fixed sized ring buffer
+    /// </summary>
     public class RingBuffer
     {
         private readonly byte[] _buffer;
         private int _position;
         private readonly int _size;
 
+        /// <summary>
+        /// create a new RingBuffer with the specified size
+        /// </summary>
+        /// <param name="size">the size of the buffer</param>
         public RingBuffer(int size)
         {
             _buffer = new byte[size];
             _size = size;
         }
 
+        /// <summary>
+        /// set the position relative to the current position
+        /// </summary>
+        /// <remarks>wraps the position of the end is reached</remarks>
+        /// <param name="offset">relative offset</param>
         public void Seek(int offset)
         {
             _position += offset;
@@ -50,6 +62,13 @@ namespace lzo.net
             }
         }
 
+        /// <summary>
+        /// reads a sequence of bytes from the RingBuffer and advances the position within the RingBuffer by the number of bytes read
+        /// </summary>
+        /// <param name="buffer">An array of bytes. When this method returns, the buffer contains the specified byte array with the values between offset and (offset + count - 1) replaced by the bytes read from the RingBuffer</param>
+        /// <param name="offset">The zero-based byte offset in buffer at which to begin storing the data read from the RingBuffer</param>
+        /// <param name="count">The maximum number of bytes to be read from the current stream</param>
+        /// <returns>The total number of bytes read into the buffer. Always equals <see cref="count"/>.</returns>
         public int Read(byte[] buffer, int offset, int count)
         {
             if (count == 0) return 0;
@@ -79,6 +98,12 @@ namespace lzo.net
             return count;
         }
 
+        /// <summary>
+        /// writes a sequence of bytes to the RingBuffer and advances the current position within this RingBuffer by the number of bytes written
+        /// </summary>
+        /// <param name="buffer">An array of bytes. This method copies count bytes from buffer to the RingBuffer.</param>
+        /// <param name="offset">The zero-based byte offset in buffer at which to begin copying bytes to the RingBuffer.</param>
+        /// <param name="count">The number of bytes to be written to the RingBuffer.</param>
         public void Write(byte[] buffer, int offset, int count)
         {
             if (count == 0) return;

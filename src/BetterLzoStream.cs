@@ -27,6 +27,9 @@ using System.IO.Compression;
 
 namespace lzo.net
 {
+    /// <summary>
+    /// Wrapper Stream for lzo compression
+    /// </summary>
     public class BetterLzoStream:Stream
     {
         private readonly Stream _base;
@@ -37,6 +40,8 @@ namespace lzo.net
         private const int MaxWindowSize = (1 << 14) + ((255 & 8) << 11) + (255 << 6) + (255 >> 2);
         private readonly RingBuffer _window = new RingBuffer(MaxWindowSize);
         private long _position;
+        private int _instruction;
+        private LzoState _lzoState;
 
         private enum LzoState
         {
@@ -45,15 +50,15 @@ namespace lzo.net
             /// </summary>
             ZeroCopy = 0,
             /// <summary>
-            /// last instruction used to copy between 1 to 3 literals 
+            /// last instruction used to copy between 1 literal 
             /// </summary>
             SmallCopy1 = 1,
             /// <summary>
-            /// last instruction used to copy between 1 to 3 literals 
+            /// last instruction used to copy between 2 literals 
             /// </summary>
             SmallCopy2 = 2,
             /// <summary>
-            /// last instruction used to copy between 1 to 3 literals 
+            /// last instruction used to copy between 3 literals 
             /// </summary>
             SmallCopy3 = 3,
             /// <summary>
@@ -62,8 +67,11 @@ namespace lzo.net
             LargeCopy = 4
         }
 
-        private int _instruction;
-        private LzoState _lzoState;
+        /// <summary>
+        /// creates a new lzo stream for decompression
+        /// </summary>
+        /// <param name="stream">the compressed stream</param>
+        /// <param name="mode">currently only decompression is supported</param>
         public BetterLzoStream(Stream stream, CompressionMode mode)
         {
             if (mode != CompressionMode.Decompress)
@@ -112,7 +120,7 @@ namespace lzo.net
         private int Decode(byte[] buffer, int offset, int count)
         {
             Debug.Assert(_decoded == null);
-            int read = 0;
+            int read;
             if (_instruction <= 15)
             {
                 /*
@@ -352,6 +360,43 @@ namespace lzo.net
             return result;
         }
 
+        private int ReadInternal(byte[] buffer, int offset, int count)
+        {
+            if (_length.HasValue && _position >= _length)
+                return -1;
+            int read;
+            if (_decoded != null)
+            {
+                var decodedLength = _decoded.Length;
+                if (count > decodedLength)
+                {
+                    Buffer.BlockCopy(_decoded, 0, buffer, offset, decodedLength);
+                    _decoded = null;
+                    return decodedLength;
+                }
+                Buffer.BlockCopy(_decoded, 0, buffer, offset, count);
+                if (decodedLength > count)
+                {
+                    var remaining = new byte[decodedLength - count];
+                    Buffer.BlockCopy(_decoded, count, remaining, 0, remaining.Length);
+                    _decoded = remaining;
+                }
+                else
+                {
+                    _decoded = null;
+                }
+                return count;
+            }
+            if ((read = Decode(buffer, offset, count)) < 0)
+            {
+                _length = _position;
+                return -1;
+            }
+            return read;
+        }
+
+        #region wrapped stream methods
+
         public override bool CanRead
         {
             get { return true; }
@@ -399,41 +444,6 @@ namespace lzo.net
             return result;
         }
 
-        private int ReadInternal(byte[] buffer, int offset, int count)
-        {
-            if (_length.HasValue && _position >= _length)
-                return -1;
-            int read;
-            if (_decoded != null)
-            {
-                var decodedLength = _decoded.Length;
-                if (count > decodedLength)
-                {
-                    Buffer.BlockCopy(_decoded, 0, buffer, offset, decodedLength);
-                    _decoded = null;
-                    return decodedLength;
-                }
-                Buffer.BlockCopy(_decoded, 0, buffer, offset, count);
-                if (decodedLength > count)
-                {
-                    var remaining = new byte[decodedLength - count];
-                    Buffer.BlockCopy(_decoded, count, remaining, 0, remaining.Length);
-                    _decoded = remaining;
-                }
-                else
-                {
-                    _decoded = null;
-                }
-                return count;
-            }
-            if ((read = Decode(buffer, offset, count)) < 0)
-            {
-                _length = _position;
-                return -1;
-            }
-            return read;
-        }
-
         public override long Seek(long offset, SeekOrigin origin)
         {
             throw new NotImplementedException();
@@ -448,5 +458,7 @@ namespace lzo.net
         {
             throw new InvalidOperationException("cannot write to readonly stream");
         }
+
+        #endregion
     }
 }
