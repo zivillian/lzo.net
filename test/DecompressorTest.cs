@@ -88,5 +88,45 @@ namespace lzo.net.test
             var enwik8 = "a1fa5ffddb56f4953e226637dabbb36a";
             ValidateFile(@"..\..\..\data\enwik8.lzo", enwik8);
         }
+
+        [Fact]
+        public void SeekableTest()
+        {
+            var filename = @"..\..\..\data\FlashMX.pdf.lzo";
+            var checksum = "8bf62ff2eebde7f3f132c6f362328dba";
+            var md5 = MD5.Create();
+            using (var file = File.OpenRead(filename))
+            using (var ms = new MemoryStream())
+            using (var lzo = new SeekableLzoStream(file, CompressionMode.Decompress))
+            {
+                //decompress all
+                lzo.CopyTo(ms);
+                var rnd = new Random();
+                var seed = rnd.Next();
+                _output.WriteLine($"If this test fails, please open an issue with 'seed = {seed}'");
+                rnd = new Random(seed);
+                for (int i = 0; i < 100; i++)
+                {
+                    var position = rnd.Next((int)lzo.Length);
+                    var seeked = lzo.Seek(position, SeekOrigin.Begin);
+                    Assert.Equal(position, seeked);
+                    seeked = ms.Seek(position, SeekOrigin.Begin);
+                    Assert.Equal(position, seeked);
+
+                    var count = Math.Min(100, (int)ms.Length - position);
+                    
+                    var lzoBuffer = new byte[count];
+                    var lzoRead = lzo.Read(lzoBuffer, 0, count);
+                    
+                    ms.Write(lzoBuffer, 0, lzoRead);
+
+                    Assert.Equal(lzo.Position, ms.Position);
+                }
+                ms.Seek(0, SeekOrigin.Begin);
+                var hash = md5.ComputeHash(ms);
+                var hex = BitConverter.ToString(hash).Replace("-", String.Empty).ToLowerInvariant();
+                Assert.Equal(checksum, hex);
+            }
+        }
     }
 }

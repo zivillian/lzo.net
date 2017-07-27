@@ -128,5 +128,16 @@ namespace lzo.net
                 count -= cnt;
             }
         }
+
+        /// <summary>
+        /// creates a deep clone
+        /// </summary>
+        /// <returns></returns>
+        public RingBuffer Clone()
+        {
+            var result = new RingBuffer(_size) {_position = _position};
+            Buffer.BlockCopy(_buffer, 0, result._buffer, 0, _size);
+            return result;
+        }
     }
 }
