@@ -11,7 +11,7 @@
     <RepositoryUrl>https://github.com/zivillian/lzo.net</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageTags>lzo</PackageTags>
-    <Description>This is an implementation of the lzo decoder in plain c#/.NET (wihtout P/Invoke, fixed or unchecked).</Description>
+    <Description>This is an implementation of the lzo decoder in plain c#/.NET (without P/Invoke, fixed or unchecked).</Description>
   </PropertyGroup>
 
 </Project>

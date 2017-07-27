@@ -2,7 +2,7 @@
 
 # lzo.net
 
-This is an implementation of the [lzo](https://www.oberhumer.com/opensource/lzo/) decoder in plain c#/.NET (wihtout P/Invoke, `fixed` or `unchecked`).
+This is an implementation of the [lzo](https://www.oberhumer.com/opensource/lzo/) decoder in plain c#/.NET (without P/Invoke, `fixed` or `unchecked`).
 
 The first version was based on the decoder from [ffmpeg](https://ffmpeg.org/doxygen/3.1/lzo_8c_source.html), but was replaced with a rewrite based on the documentation from [kernel.org](https://www.kernel.org/doc/Documentation/lzo.txt).
 
