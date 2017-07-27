@@ -113,7 +113,7 @@ namespace lzo.net
 
         public override long Seek(long offset, SeekOrigin origin)
         {
-            var position = Position;
+            var position = OutputPosition;
             var targetPosition = offset;
             switch (origin)
             {
@@ -137,7 +137,7 @@ namespace lzo.net
                     _snapshots.Pop();
                 }
 
-                Position = position = snapshot.OutputPosition;
+                OutputPosition = position = snapshot.OutputPosition;
                 InputPosition = snapshot.InputPosition;
                 RingBuffer = snapshot.RingBuffer;
                 Instruction = snapshot.Instruction;

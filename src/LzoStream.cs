@@ -40,7 +40,7 @@ namespace lzo.net
         protected byte[] DecodedBuffer;
         protected const int MaxWindowSize = (1 << 14) + ((255 & 8) << 11) + (255 << 6) + (255 >> 2);
         protected RingBuffer RingBuffer = new RingBuffer(MaxWindowSize);
-        private long _position;
+        protected long OutputPosition;
         protected int Instruction;
         protected LzoState State;
 
@@ -299,7 +299,7 @@ namespace lzo.net
             }
 
             Instruction = GetByte();
-            _position += read;
+            OutputPosition += read;
             return read;
         }
 
@@ -373,7 +373,7 @@ namespace lzo.net
 
         private int ReadInternal(byte[] buffer, int offset, int count)
         {
-            if (_length.HasValue && _position >= _length)
+            if (_length.HasValue && OutputPosition >= _length)
                 return -1;
             int read;
             if (DecodedBuffer != null)
@@ -383,7 +383,7 @@ namespace lzo.net
                 {
                     Buffer.BlockCopy(DecodedBuffer, 0, buffer, offset, decodedLength);
                     DecodedBuffer = null;
-                    _position += decodedLength;
+                    OutputPosition += decodedLength;
                     return decodedLength;
                 }
                 Buffer.BlockCopy(DecodedBuffer, 0, buffer, offset, count);
@@ -397,12 +397,12 @@ namespace lzo.net
                 {
                     DecodedBuffer = null;
                 }
-                _position += count;
+                OutputPosition += count;
                 return count;
             }
             if ((read = Decode(buffer, offset, count)) < 0)
             {
-                _length = _position;
+                _length = OutputPosition;
                 return -1;
             }
             return read;
@@ -431,8 +431,12 @@ namespace lzo.net
 
         public override long Position
         {
-            get { return _position; }
-            set { _position = value; }
+            get { return OutputPosition; }
+            set
+            {
+                if (OutputPosition == value) return;
+                Seek(value, SeekOrigin.Begin);
+            }
         }
 
         public override void Flush()
@@ -442,7 +446,7 @@ namespace lzo.net
 
         public override int Read(byte[] buffer, int offset, int count)
         {
-            if (_length.HasValue && _position >= _length)
+            if (_length.HasValue && OutputPosition >= _length)
                 return 0;
             var result = 0;
             while (count > 0)
