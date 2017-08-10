@@ -4,7 +4,7 @@
     <TargetFrameworks>netstandard1.5;net20;net40;net45</TargetFrameworks>
     <TreatWarningsAsErrors>True</TreatWarningsAsErrors>
     <GeneratePackageOnBuild Condition="'$(Configuration)' != 'Debug'">True</GeneratePackageOnBuild>
-    <Version>0.0.2</Version>
+    <Version>0.0.3</Version>
     <Authors>Bianco Veigel</Authors>
     <PackageLicenseUrl>https://github.com/zivillian/lzo.net/blob/master/LICENSE</PackageLicenseUrl>
     <PackageProjectUrl>https://github.com/zivillian/lzo.net</PackageProjectUrl>
@@ -12,6 +12,8 @@
     <RepositoryType>git</RepositoryType>
     <PackageTags>lzo</PackageTags>
     <Description>This is an implementation of the lzo decoder in plain c#/.NET (without P/Invoke, fixed or unchecked).</Description>
+    <SignAssembly>True</SignAssembly>
+    <AssemblyOriginatorKeyFile>lzo.snk</AssemblyOriginatorKeyFile>
   </PropertyGroup>
 
 </Project>
