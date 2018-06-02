@@ -337,7 +337,6 @@ namespace lzo.net
                 if (read == 0)
                     throw new EndOfStreamException();
                 Debug.Assert(read == size);
-                RingBuffer.Seek(distance - read);
                 RingBuffer.Write(buffer, offset, read);
                 copy -= read;
                 var copies = copy / distance;
