@@ -108,7 +108,7 @@ namespace lzo.net
 
         public override bool CanSeek
         {
-            get { return true; }
+            get { return false; }
         }
 
         public override long Seek(long offset, SeekOrigin origin)
