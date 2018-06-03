@@ -53,7 +53,10 @@ namespace lzo.net
             _position += offset;
             if (_position > _size)
             {
-                _position %= _size;
+                do
+                {
+                    _position -= _size;
+                } while (_position > _size);
                 return;
             }
             while (_position < 0)
