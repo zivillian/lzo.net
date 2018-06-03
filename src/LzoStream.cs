@@ -89,6 +89,8 @@ namespace lzo.net
             if (!stream.CanRead)
                 throw new ArgumentException("write-only stream cannot be used for decompression");
             _base = stream;
+            if (!(stream is BufferedStream))
+                _base = new BufferedStream(stream);
             _inputLength = _base.Length;
             _leaveOpen = leaveOpen;
             DecodeFirstByte();
