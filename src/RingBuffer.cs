@@ -78,11 +78,12 @@ namespace lzo.net
             {
                 if (count < 10)
                 {
-                    for (int i = 0; i < count; i++)
+                    do
                     {
-                        buffer[offset] = _buffer[_position - distance];
-                        _buffer[_position++] = buffer[offset++];
-                    }
+                        var value = _buffer[_position - distance];
+                        _buffer[_position++] = value;
+                        buffer[offset++] = value;
+                    } while (--count > 0);
                 }
                 else
                 {
