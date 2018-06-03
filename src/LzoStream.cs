@@ -98,20 +98,14 @@ namespace lzo.net
 
         private void DecodeFirstByte()
         {
-            Instruction = GetByte();
+            Instruction = _base.ReadByte();
+            InputPosition++;
+            if (Instruction == -1)
+                throw new EndOfStreamException();
             if (Instruction > 15 && Instruction <= 17)
             {
                 throw new Exception();
             }
-        }
-
-        private byte GetByte()
-        {
-            var result = _base.ReadByte();
-            InputPosition++;
-            if (result == -1)
-                throw new EndOfStreamException();
-            return (byte)result;
         }
 
         private void Copy(byte[] buffer, int offset, int count)
@@ -139,11 +133,10 @@ namespace lzo.net
                 /*
                  * Depends on the number of literals copied by the last instruction.                 
                  */
-                int distance;
-                int length;
                 switch (State)
                 {
                     case LzoState.ZeroCopy:
+                    {
                         /*
                          * this encoding will be a copy of 4 or more literal, and must be interpreted
                          * like this :                         * 
@@ -151,7 +144,7 @@ namespace lzo.net
                          * length = 3 + (L ?: 15 + (zero_bytes * 255) + non_zero_byte)
                          * state = 4  (no extra literals are copied)
                          */
-                        length = 3;
+                        var length = 3;
                         if (Instruction != 0)
                         {
                             length += Instruction;
@@ -163,8 +156,8 @@ namespace lzo.net
                         if (length > count)
                         {
                             Copy(buffer, offset, count);
-                            DecodedBuffer = new byte[length-count];
-                            Copy(DecodedBuffer, 0, length-count);
+                            DecodedBuffer = new byte[length - count];
+                            Copy(DecodedBuffer, 0, length - count);
                             read = count;
                         }
                         else
@@ -173,41 +166,15 @@ namespace lzo.net
                             read = length;
                         }
                         State = LzoState.LargeCopy;
+                    }
                         break;
                     case LzoState.SmallCopy1:
                     case LzoState.SmallCopy2:
                     case LzoState.SmallCopy3:
-                        /* 
-                         * the instruction is a copy of a
-                         * 2-byte block from the dictionary within a 1kB distance. It is worth
-                         * noting that this instruction provides little savings since it uses 2
-                         * bytes to encode a copy of 2 other bytes but it encodes the number of
-                         * following literals for free. It must be interpreted like this :
-                         * 
-                         * 0 0 0 0 D D S S  (0..15)  : copy 2 bytes from <= 1kB distance
-                         * length = 2
-                         * state = S (copy S literals after this block)
-                         * Always followed by exactly one byte : H H H H H H H H
-                         * distance = (H << 2) + D + 1
-                         */
-                        var h = GetByte();
-                        distance = (h << 2) + ((Instruction & 0xc) >> 2) + 1;
-
-                        read = CopyFromRingBuffer(buffer, offset, count, distance, 2, Instruction & 0x3);
+                        read = CopySmall(buffer, offset, count);
                         break;
                     case LzoState.LargeCopy:
-                        /*
-                         *the instruction becomes a copy of a 3-byte block from the
-                         * dictionary from a 2..3kB distance, and must be interpreted like this :
-                         * 0 0 0 0 D D S S  (0..15)  : copy 3 bytes from 2..3 kB distance
-                         * length = 3
-                         * state = S (copy S literals after this block)
-                         * Always followed by exactly one byte : H H H H H H H H
-                         * distance = (H << 2) + D + 2049
-                         */
-                        distance = (GetByte() << 2) + ((Instruction & 0xc) >> 2) + 2049;
-
-                        read = CopyFromRingBuffer(buffer, offset, count, distance, 3, Instruction & 0x3);
+                        read = LargeCopy(buffer, offset, count);
                         break;
                     default:
                         throw new ArgumentOutOfRangeException();
@@ -234,9 +201,14 @@ namespace lzo.net
                 {
                     length = 2 + l;
                 }
-                var s = GetByte();
-                var d = GetByte() << 8;
-                d = (d | s) >> 2;
+                var s = _base.ReadByte();
+                if (s == -1)
+                    throw new EndOfStreamException();
+                var d = _base.ReadByte();
+                if (d == -1)
+                    throw new EndOfStreamException();
+                InputPosition += 3;
+                d = ((d << 8) | s) >> 2;
                 var distance = 16384 + ((Instruction & 0x8) << 11) | d;
                 if (distance == 16384)
                     return -1;
@@ -263,9 +235,14 @@ namespace lzo.net
                 {
                     length = 2 + l;
                 }
-                var s = GetByte();
-                var d = GetByte() << 8;
-                d = (d | s) >> 2;
+                var s = _base.ReadByte();
+                if (s == -1)
+                    throw new EndOfStreamException();
+                var d = _base.ReadByte();
+                if (d == -1)
+                    throw new EndOfStreamException();
+                InputPosition += 3;
+                d = ((d << 8) | s) >> 2;
                 var distance = d + 1;
 
                 read = CopyFromRingBuffer(buffer, offset, count, distance, length, s & 0x3);
@@ -281,7 +258,11 @@ namespace lzo.net
                  * distance = (H << 3) + D + 1
                  */
                 var length = 3 + ((Instruction >> 5) & 0x1);
-                var distance = (GetByte() << 3) + ((Instruction >> 2) & 0x7) + 1;
+                var result = _base.ReadByte();
+                InputPosition += 2;
+                if (result == -1)
+                    throw new EndOfStreamException();
+                var distance = (result << 3) + ((Instruction >> 2) & 0x7) + 1;
 
                 read = CopyFromRingBuffer(buffer, offset, count, distance, length, Instruction & 0x3);
             }
@@ -296,28 +277,83 @@ namespace lzo.net
                  * distance = (H << 3) + D + 1
                  */
                 var length = 5 + ((Instruction >> 5) & 0x3);
-                var distance = (GetByte() << 3) + ((Instruction & 0x1c) >> 2) + 1;
+                var result = _base.ReadByte();
+                InputPosition += 2;
+                if (result == -1)
+                    throw new EndOfStreamException();
+                var distance = (result << 3) + ((Instruction & 0x1c) >> 2) + 1;
 
                 read = CopyFromRingBuffer(buffer, offset, count, distance, length, Instruction & 0x3);
             }
 
-            Instruction = GetByte();
+            Instruction = _base.ReadByte();
+            if (Instruction == -1)
+                throw new EndOfStreamException();
             OutputPosition += read;
             return read;
         }
 
+        private int LargeCopy(byte[] buffer, int offset, int count)
+        {
+            /*
+             *the instruction becomes a copy of a 3-byte block from the
+             * dictionary from a 2..3kB distance, and must be interpreted like this :
+             * 0 0 0 0 D D S S  (0..15)  : copy 3 bytes from 2..3 kB distance
+             * length = 3
+             * state = S (copy S literals after this block)
+             * Always followed by exactly one byte : H H H H H H H H
+             * distance = (H << 2) + D + 2049
+             */
+            var result = _base.ReadByte();
+            InputPosition += 2;
+            if (result == -1)
+                throw new EndOfStreamException();
+            var distance = (result << 2) + ((Instruction & 0xc) >> 2) + 2049;
+
+            return CopyFromRingBuffer(buffer, offset, count, distance, 3, Instruction & 0x3);
+        }
+
+        private int CopySmall(byte[] buffer, int offset, int count)
+        {
+            /* 
+             * the instruction is a copy of a
+             * 2-byte block from the dictionary within a 1kB distance. It is worth
+             * noting that this instruction provides little savings since it uses 2
+             * bytes to encode a copy of 2 other bytes but it encodes the number of
+             * following literals for free. It must be interpreted like this :
+             * 
+             * 0 0 0 0 D D S S  (0..15)  : copy 2 bytes from <= 1kB distance
+             * length = 2
+             * state = S (copy S literals after this block)
+             * Always followed by exactly one byte : H H H H H H H H
+             * distance = (H << 2) + D + 1
+             */
+            var h = _base.ReadByte();
+            InputPosition += 2;
+            if (h == -1)
+                throw new EndOfStreamException();
+
+            var distance = (h << 2) + ((Instruction & 0xc) >> 2) + 1;
+
+            return CopyFromRingBuffer(buffer, offset, count, distance, 2, Instruction & 0x3);
+        }
+
         private int ReadLength()
         {
-            byte b;
+            int b;
             int length = 0;
-            while ((b = GetByte()) == 0)
+            while ((b = _base.ReadByte()) == 0)
             {
                 if (length >= Int32.MaxValue - 1000)
                 {
                     throw new Exception();
                 }
+                InputPosition += 1;
                 length += 255;
             }
+            if (b == -1)
+                throw new EndOfStreamException();
+            InputPosition += 1;
             return length + b;
         }
 
