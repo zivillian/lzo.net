@@ -116,9 +116,8 @@ namespace lzo.net
 
         private void Copy(byte[] buffer, int offset, int count)
         {
-            if (count > _inputLength - InputPosition)
-                throw new EndOfStreamException();
-            while (count > 0)
+            Debug.Assert(count > 0);
+            do
             {
                 var read = _base.Read(buffer, offset, count);
                 if (read == 0)
@@ -127,11 +126,12 @@ namespace lzo.net
                 InputPosition += read;
                 offset += read;
                 count -= read;
-            }
+            } while (count > 0);
         }
 
         protected virtual int Decode(byte[] buffer, int offset, int count)
         {
+            Debug.Assert(count > 0);
             Debug.Assert(DecodedBuffer == null);
             int read;
             if (Instruction <= 15)
@@ -162,9 +162,10 @@ namespace lzo.net
                         }
                         if (length > count)
                         {
-                            DecodedBuffer = new byte[length];
-                            Copy(DecodedBuffer, 0, length);
-                            read = 0;
+                            Copy(buffer, offset, count);
+                            DecodedBuffer = new byte[length-count];
+                            Copy(DecodedBuffer, 0, length-count);
+                            read = count;
                         }
                         else
                         {
@@ -322,6 +323,7 @@ namespace lzo.net
 
         private int CopyFromRingBuffer(byte[] buffer, int offset, int count, int distance, int copy, int state)
         {
+            Debug.Assert(copy > 0);
             var result = copy + state;
             if (count < result)
             {
@@ -334,35 +336,24 @@ namespace lzo.net
             if (copy > distance)
             {
                 size = distance;
-                RingBuffer.Seek(-distance);
-                var read = RingBuffer.Read(buffer, offset, size);
-                if (read == 0)
-                    throw new EndOfStreamException();
-                Debug.Assert(read == size);
-                RingBuffer.Write(buffer, offset, read);
-                copy -= read;
+                RingBuffer.Copy(buffer, offset, distance, size);
+                copy -= size;
                 var copies = copy / distance;
                 for (int i = 0; i < copies; i++)
                 {
-                    RingBuffer.Write(buffer, offset, read);
-                    Buffer.BlockCopy(buffer, offset, buffer, offset + read, read);
-                    offset += read;
-                    copy -= read;
+                    RingBuffer.Write(buffer, offset, size);
+                    Buffer.BlockCopy(buffer, offset, buffer, offset + size, size);
+                    offset += size;
+                    copy -= size;
                 }
-                offset += read;
+                offset += size;
             }
-            while (copy > 0)
+            if (copy > 0)
             {
-                RingBuffer.Seek(-distance);
                 if (copy < size)
                     size = copy;
-                var read = RingBuffer.Read(buffer, offset, size);
-                if (read == 0)
-                    throw new EndOfStreamException();
-                RingBuffer.Seek(distance - read);
-                RingBuffer.Write(buffer, offset, read);
-                offset += read;
-                copy -= read;
+                RingBuffer.Copy(buffer, offset, distance, size);
+                offset += size;
             }
             if (state > 0)
             {
@@ -374,6 +365,7 @@ namespace lzo.net
 
         private int ReadInternal(byte[] buffer, int offset, int count)
         {
+            Debug.Assert(count > 0);
             if (_length.HasValue && OutputPosition >= _length)
                 return -1;
             int read;

@@ -66,43 +66,72 @@ namespace lzo.net
         }
 
         /// <summary>
+        /// copies as sequence of bytes from the Ringbuffer at the specified distance into the buffer and also the RingBuffer itself
+        /// </summary>
+        /// <param name="buffer">An array of bytes. When this method returns, the buffer contains the specified byte array with the values between offset and (offset + count - 1) replaced by the bytes read from the RingBuffer</param>
+        /// <param name="offset">The zero-based byte offset in buffer at which to begin storing the data read from the RingBuffer</param>
+        /// <param name="distance">The distance to seek backwards before starting to copy</param>
+        /// <param name="count">The maximum number of bytes to be read from the RingBuffer</param>
+        public void Copy(byte[] buffer, int offset, int distance, int count)
+        {
+            if (_position - distance > 0 && _position + count < _size)
+            {
+                if (count < 10)
+                {
+                    for (int i = 0; i < count; i++)
+                    {
+                        buffer[offset] = _buffer[_position - distance];
+                        _buffer[_position++] = buffer[offset++];
+                    }
+                }
+                else
+                {
+                    Buffer.BlockCopy(_buffer, _position - distance, buffer, offset, count);
+                    Buffer.BlockCopy(buffer, offset, _buffer, _position, count);
+                    _position += count;
+                }
+            }
+            else
+            {
+                Seek(-distance);
+                Read(buffer, offset, count);
+                Seek(distance - count);
+                Write(buffer, offset, count);
+            }
+        }
+
+        /// <summary>
         /// reads a sequence of bytes from the RingBuffer and advances the position within the RingBuffer by the number of bytes read
         /// </summary>
         /// <param name="buffer">An array of bytes. When this method returns, the buffer contains the specified byte array with the values between offset and (offset + count - 1) replaced by the bytes read from the RingBuffer</param>
         /// <param name="offset">The zero-based byte offset in buffer at which to begin storing the data read from the RingBuffer</param>
-        /// <param name="count">The maximum number of bytes to be read from the current stream</param>
-        /// <returns>The total number of bytes read into the buffer. Always equals <see cref="count"/>.</returns>
-        public int Read(byte[] buffer, int offset, int count)
+        /// <param name="count">The maximum number of bytes to be read from the RingBuffer</param>
+        public void Read(byte[] buffer, int offset, int count)
         {
-            if (count == 0) return 0;
-            var cnt = count;
             if (count < 10 && (_position + count) < _size)
             {
                 do
                 {
                     buffer[offset++] = _buffer[_position++];
-                } while (--cnt > 0);
+                } while (--count > 0);
             }
             else
             {
-                while (cnt > 0)
+                while (count > 0)
                 {
                     var copy = _size - _position;
-                    if (copy > cnt)
+                    if (copy > count)
                     {
-                        copy = cnt;
+                        Buffer.BlockCopy(_buffer, _position, buffer, offset, count);
+                        _position += count;
+                        break;
                     }
                     Buffer.BlockCopy(_buffer, _position, buffer, offset, copy);
-                    _position = (_position + copy);
-                    if (_position == _size)
-                    {
-                        _position = 0;
-                    }
-                    cnt -= copy;
+                    _position = 0;
+                    count -= copy;
                     offset += copy;
                 }
             }
-            return count;
         }
 
         /// <summary>
@@ -113,7 +142,6 @@ namespace lzo.net
         /// <param name="count">The number of bytes to be written to the RingBuffer.</param>
         public void Write(byte[] buffer, int offset, int count)
         {
-            if (count == 0) return;
             if (count < 10 && (_position + count) < _size)
             {
                 do
@@ -127,13 +155,13 @@ namespace lzo.net
                 {
                     var cnt = _size - _position;
                     if (cnt > count)
-                        cnt = count;
-                    Buffer.BlockCopy(buffer, offset, _buffer, _position, cnt);
-                    _position = (_position + cnt);
-                    if (_position == _size)
                     {
-                        _position = 0;
+                        Buffer.BlockCopy(buffer, offset, _buffer, _position, count);
+                        _position += count;
+                        return;
                     }
+                    Buffer.BlockCopy(buffer, offset, _buffer, _position, cnt);
+                    _position = 0;
                     offset += cnt;
                     count -= cnt;
                 }
