@@ -82,21 +82,25 @@ namespace lzo.net
                 {
                     buffer[offset++] = _buffer[_position++];
                 } while (--cnt > 0);
-                return count;
             }
-            while (cnt > 0)
+            else
             {
-                var copy = _size - _position;
-                if (copy > cnt)
+                while (cnt > 0)
                 {
-                    copy = cnt;
+                    var copy = _size - _position;
+                    if (copy > cnt)
+                    {
+                        copy = cnt;
+                    }
+                    Buffer.BlockCopy(_buffer, _position, buffer, offset, copy);
+                    _position = (_position + copy);
+                    if (_position == _size)
+                    {
+                        _position = 0;
+                    }
+                    cnt -= copy;
+                    offset += copy;
                 }
-                Buffer.BlockCopy(_buffer, _position, buffer, offset, copy);
-                _position = (_position + copy);
-                if (_position >= _size)
-                    _position %= _size;
-                cnt -= copy;
-                offset += copy;
             }
             return count;
         }
@@ -118,17 +122,21 @@ namespace lzo.net
                 } while (--count > 0);
             }
             else
-                while (count > 0)
             {
-                var cnt = _size - _position;
-                if (cnt > count)
-                    cnt = count;
-                Buffer.BlockCopy(buffer, offset, _buffer, _position, cnt);
-                _position = (_position + cnt);
-                if (_position >= _size)
-                    _position %= _size;
-                offset += cnt;
-                count -= cnt;
+                while (count > 0)
+                {
+                    var cnt = _size - _position;
+                    if (cnt > count)
+                        cnt = count;
+                    Buffer.BlockCopy(buffer, offset, _buffer, _position, cnt);
+                    _position = (_position + cnt);
+                    if (_position == _size)
+                    {
+                        _position = 0;
+                    }
+                    offset += cnt;
+                    count -= cnt;
+                }
             }
         }
 
