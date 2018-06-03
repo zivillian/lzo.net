@@ -341,10 +341,14 @@ namespace lzo.net
                 var copies = copy / distance;
                 for (int i = 0; i < copies; i++)
                 {
-                    RingBuffer.Write(buffer, offset, size);
                     Buffer.BlockCopy(buffer, offset, buffer, offset + size, size);
                     offset += size;
                     copy -= size;
+                }
+                if (copies > 0)
+                {
+                    var length = size * copies;
+                    RingBuffer.Write(buffer, offset - length, length);
                 }
                 offset += size;
             }
