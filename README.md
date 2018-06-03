@@ -29,6 +29,6 @@ using (var decompressed = new LzoStream(compressed, CompressionMode.Decompress))
 
 ## Performance
 
-The code was optimized as much as possible but since it's plain .NET it is of course slower then the native c version. Benchmarks (on the test files) show a performance penalty around factor 4. If you require the best performance, consider using another library which wraps the native version.
+The code was optimized as much as possible but since it's plain .NET it is of course slower then the native c version. Benchmarks (on the test files) show a performance penalty around factor 3. If you require the best performance, consider using another library which wraps the native version.
 
 Please open an issue, if you've found a way to make the decoder faster.
