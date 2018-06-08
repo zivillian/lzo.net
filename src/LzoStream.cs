@@ -32,11 +32,10 @@ namespace lzo.net
     /// </summary>
     public class LzoStream:Stream
     {
-        private readonly Stream _base;
+        protected readonly Stream Source;
         private long? _length;
         protected long InputPosition;
         private readonly bool _leaveOpen;
-        private readonly long _inputLength;
         protected byte[] DecodedBuffer;
         protected const int MaxWindowSize = (1 << 14) + ((255 & 8) << 11) + (255 << 6) + (255 >> 2);
         protected RingBuffer RingBuffer = new RingBuffer(MaxWindowSize);
@@ -88,8 +87,9 @@ namespace lzo.net
                 throw new NotSupportedException("Compression is not supported");
             if (!stream.CanRead)
                 throw new ArgumentException("write-only stream cannot be used for decompression");
-            _base = stream;
-            _inputLength = _base.Length;
+            Source = stream;
+            if (!(stream is BufferedStream))
+                Source = new BufferedStream(stream);
             _leaveOpen = leaveOpen;
             DecodeFirstByte();
         }
@@ -105,7 +105,7 @@ namespace lzo.net
 
         private byte GetByte()
         {
-            var result = _base.ReadByte();
+            var result = Source.ReadByte();
             InputPosition++;
             if (result == -1)
                 throw new EndOfStreamException();
@@ -117,7 +117,7 @@ namespace lzo.net
             Debug.Assert(count > 0);
             do
             {
-                var read = _base.Read(buffer, offset, count);
+                var read = Source.Read(buffer, offset, count);
                 if (read == 0)
                     throw new EndOfStreamException();
                 RingBuffer.Write(buffer, offset, read);
@@ -474,7 +474,7 @@ namespace lzo.net
         protected override void Dispose(bool disposing)
         {
             if (!_leaveOpen)
-                _base.Dispose();
+                Source.Dispose();
             base.Dispose(disposing);
         }
 

@@ -60,7 +60,6 @@ namespace lzo.net
             }
         }
 
-        private readonly Stream _base;
         private readonly int _snapshotInterval;
         private readonly Stack<Snapshot> _snapshots;
 
@@ -94,7 +93,6 @@ namespace lzo.net
             if (!stream.CanSeek)
                 throw new ArgumentException("stream must be seekable", nameof(stream));
 
-            _base = stream;
             _snapshotInterval = snapshotInterval;
             _snapshots = new Stack<Snapshot>();
             TakeSnapshot();
@@ -143,7 +141,7 @@ namespace lzo.net
                 Instruction = snapshot.Instruction;
                 State = snapshot.State;
                 DecodedBuffer = null;
-                _base.Seek(snapshot.InputPosition, SeekOrigin.Begin);
+                Source.Seek(snapshot.InputPosition, SeekOrigin.Begin);
             }
             if (targetPosition > position)
             {
