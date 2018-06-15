@@ -136,7 +136,6 @@ namespace lzo.net
                 }
 
                 OutputPosition = position = snapshot.OutputPosition;
-                InputPosition = snapshot.InputPosition;
                 RingBuffer = snapshot.RingBuffer;
                 Instruction = snapshot.Instruction;
                 State = snapshot.State;
@@ -160,9 +159,9 @@ namespace lzo.net
 
         private void TakeSnapshot()
         {
-            if (_snapshots.Count > 0 && (_snapshots.Peek().InputPosition + _snapshotInterval) > InputPosition)
+            if (_snapshots.Count > 0 && (_snapshots.Peek().InputPosition + _snapshotInterval) > Source.Position)
                 return;
-            _snapshots.Push(new Snapshot(Position, InputPosition, RingBuffer, Instruction, State));
+            _snapshots.Push(new Snapshot(Position, Source.Position, RingBuffer, Instruction, State));
         }
     }
 }

@@ -34,9 +34,7 @@ namespace lzo.net
     {
         protected readonly Stream Source;
         private long? _length;
-        protected long InputPosition;
         private readonly bool _leaveOpen;
-
         protected byte[] DecodedBuffer;
         protected const int MaxWindowSize = (1 << 14) + ((255 & 8) << 11) + (255 << 6) + (255 >> 2);
         protected RingBuffer RingBuffer = new RingBuffer(MaxWindowSize);
@@ -98,7 +96,6 @@ namespace lzo.net
         private void DecodeFirstByte()
         {
             Instruction = Source.ReadByte();
-            InputPosition++;
             if (Instruction == -1)
                 throw new EndOfStreamException();
             if (Instruction > 15 && Instruction <= 17)
@@ -116,7 +113,6 @@ namespace lzo.net
                 if (read == 0)
                     throw new EndOfStreamException();
                 RingBuffer.Write(buffer, offset, read);
-                InputPosition += read;
                 offset += read;
                 count -= read;
             } while (count > 0);
@@ -206,7 +202,6 @@ namespace lzo.net
                 var d = Source.ReadByte();
                 if (d == -1)
                     throw new EndOfStreamException();
-                InputPosition += 3;
                 d = ((d << 8) | s) >> 2;
                 var distance = 16384 + ((Instruction & 0x8) << 11) | d;
                 if (distance == 16384)
@@ -240,7 +235,6 @@ namespace lzo.net
                 var d = Source.ReadByte();
                 if (d == -1)
                     throw new EndOfStreamException();
-                InputPosition += 3;
                 d = ((d << 8) | s) >> 2;
                 var distance = d + 1;
 
@@ -258,7 +252,6 @@ namespace lzo.net
                  */
                 var length = 3 + ((Instruction >> 5) & 0x1);
                 var result = Source.ReadByte();
-                InputPosition += 2;
                 if (result == -1)
                     throw new EndOfStreamException();
                 var distance = (result << 3) + ((Instruction >> 2) & 0x7) + 1;
@@ -277,7 +270,6 @@ namespace lzo.net
                  */
                 var length = 5 + ((Instruction >> 5) & 0x3);
                 var result = Source.ReadByte();
-                InputPosition += 2;
                 if (result == -1)
                     throw new EndOfStreamException();
                 var distance = (result << 3) + ((Instruction & 0x1c) >> 2) + 1;
@@ -304,7 +296,6 @@ namespace lzo.net
              * distance = (H << 2) + D + 2049
              */
             var result = Source.ReadByte();
-            InputPosition += 2;
             if (result == -1)
                 throw new EndOfStreamException();
             var distance = (result << 2) + ((Instruction & 0xc) >> 2) + 2049;
@@ -328,7 +319,6 @@ namespace lzo.net
              * distance = (H << 2) + D + 1
              */
             var h = Source.ReadByte();
-            InputPosition += 2;
             if (h == -1)
                 throw new EndOfStreamException();
 
@@ -347,12 +337,10 @@ namespace lzo.net
                 {
                     throw new Exception();
                 }
-                InputPosition += 1;
                 length += 255;
             }
             if (b == -1)
                 throw new EndOfStreamException();
-            InputPosition += 1;
             return length + b;
         }
 
