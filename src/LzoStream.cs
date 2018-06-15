@@ -36,6 +36,7 @@ namespace lzo.net
         private long? _length;
         protected long InputPosition;
         private readonly bool _leaveOpen;
+
         protected byte[] DecodedBuffer;
         protected const int MaxWindowSize = (1 << 14) + ((255 & 8) << 11) + (255 << 6) + (255 >> 2);
         protected RingBuffer RingBuffer = new RingBuffer(MaxWindowSize);
@@ -96,20 +97,14 @@ namespace lzo.net
 
         private void DecodeFirstByte()
         {
-            Instruction = GetByte();
+            Instruction = _base.ReadByte();
+            InputPosition++;
+            if (Instruction == -1)
+                throw new EndOfStreamException();
             if (Instruction > 15 && Instruction <= 17)
             {
                 throw new Exception();
             }
-        }
-
-        private byte GetByte()
-        {
-            var result = Source.ReadByte();
-            InputPosition++;
-            if (result == -1)
-                throw new EndOfStreamException();
-            return (byte)result;
         }
 
         private void Copy(byte[] buffer, int offset, int count)
@@ -232,9 +227,14 @@ namespace lzo.net
                 {
                     length = 2 + l;
                 }
-                var s = GetByte();
-                var d = GetByte() << 8;
-                d = (d | s) >> 2;
+                var s = _base.ReadByte();
+                if (s == -1)
+                    throw new EndOfStreamException();
+                var d = _base.ReadByte();
+                if (d == -1)
+                    throw new EndOfStreamException();
+                InputPosition += 3;
+                d = ((d << 8) | s) >> 2;
                 var distance = 16384 + ((Instruction & 0x8) << 11) | d;
                 if (distance == 16384)
                     return -1;
@@ -261,9 +261,14 @@ namespace lzo.net
                 {
                     length = 2 + l;
                 }
-                var s = GetByte();
-                var d = GetByte() << 8;
-                d = (d | s) >> 2;
+                var s = _base.ReadByte();
+                if (s == -1)
+                    throw new EndOfStreamException();
+                var d = _base.ReadByte();
+                if (d == -1)
+                    throw new EndOfStreamException();
+                InputPosition += 3;
+                d = ((d << 8) | s) >> 2;
                 var distance = d + 1;
 
                 read = CopyFromRingBuffer(buffer, offset, count, distance, length, s & 0x3);
@@ -279,7 +284,11 @@ namespace lzo.net
                  * distance = (H << 3) + D + 1
                  */
                 var length = 3 + ((Instruction >> 5) & 0x1);
-                var distance = (GetByte() << 3) + ((Instruction >> 2) & 0x7) + 1;
+                var result = _base.ReadByte();
+                InputPosition += 2;
+                if (result == -1)
+                    throw new EndOfStreamException();
+                var distance = (result << 3) + ((Instruction >> 2) & 0x7) + 1;
 
                 read = CopyFromRingBuffer(buffer, offset, count, distance, length, Instruction & 0x3);
             }
@@ -294,28 +303,38 @@ namespace lzo.net
                  * distance = (H << 3) + D + 1
                  */
                 var length = 5 + ((Instruction >> 5) & 0x3);
-                var distance = (GetByte() << 3) + ((Instruction & 0x1c) >> 2) + 1;
+                var result = _base.ReadByte();
+                InputPosition += 2;
+                if (result == -1)
+                    throw new EndOfStreamException();
+                var distance = (result << 3) + ((Instruction & 0x1c) >> 2) + 1;
 
                 read = CopyFromRingBuffer(buffer, offset, count, distance, length, Instruction & 0x3);
             }
 
-            Instruction = GetByte();
+            Instruction = _base.ReadByte();
+            if (Instruction == -1)
+                throw new EndOfStreamException();
             OutputPosition += read;
             return read;
         }
 
         private int ReadLength()
         {
-            byte b;
+            int b;
             int length = 0;
-            while ((b = GetByte()) == 0)
+            while ((b = _base.ReadByte()) == 0)
             {
                 if (length >= Int32.MaxValue - 1000)
                 {
                     throw new Exception();
                 }
+                InputPosition += 1;
                 length += 255;
             }
+            if (b == -1)
+                throw new EndOfStreamException();
+            InputPosition += 1;
             return length + b;
         }
 
