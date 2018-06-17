@@ -123,165 +123,183 @@ namespace lzo.net
             Debug.Assert(count > 0);
             Debug.Assert(DecodedBuffer == null);
             int read;
-            if (Instruction <= 15)
+            var i = Instruction >> 4;
+            switch (i)
             {
-                /*
-                 * Depends on the number of literals copied by the last instruction.                 
-                 */
-                switch (State)
+                case 0://Instruction <= 15
                 {
-                    case LzoState.ZeroCopy:
+                    /*
+                     * Depends on the number of literals copied by the last instruction.                 
+                     */
+                    switch (State)
                     {
-                        /*
-                         * this encoding will be a copy of 4 or more literal, and must be interpreted
-                         * like this :                         * 
-                         * 0 0 0 0 L L L L  (0..15)  : copy long literal string
-                         * length = 3 + (L ?: 15 + (zero_bytes * 255) + non_zero_byte)
-                         * state = 4  (no extra literals are copied)
-                         */
-                        var length = 3;
-                        if (Instruction != 0)
+                        case LzoState.ZeroCopy:
                         {
-                            length += Instruction;
+                            /*
+                             * this encoding will be a copy of 4 or more literal, and must be interpreted
+                             * like this :                         * 
+                             * 0 0 0 0 L L L L  (0..15)  : copy long literal string
+                             * length = 3 + (L ?: 15 + (zero_bytes * 255) + non_zero_byte)
+                             * state = 4  (no extra literals are copied)
+                             */
+                            var length = 3;
+                            if (Instruction != 0)
+                            {
+                                length += Instruction;
+                            }
+                            else
+                            {
+                                length += 15 + ReadLength();
+                            }
+                            State = LzoState.LargeCopy;
+                            if (length <= count)
+                            {
+                                Copy(buffer, offset, length);
+                                read = length;
+                            }
+                            else
+                            {
+                                Copy(buffer, offset, count);
+                                DecodedBuffer = new byte[length - count];
+                                Copy(DecodedBuffer, 0, length - count);
+                                read = count;
+                            }
+                            break;
                         }
-                        else
-                        {
-                            length += 15 + ReadLength();
-                        }
-                        if (length > count)
-                        {
-                            Copy(buffer, offset, count);
-                            DecodedBuffer = new byte[length - count];
-                            Copy(DecodedBuffer, 0, length - count);
-                            read = count;
-                        }
-                        else
-                        {
-                            Copy(buffer, offset, length);
-                            read = length;
-                        }
-                        State = LzoState.LargeCopy;
+                        case LzoState.SmallCopy1:
+                        case LzoState.SmallCopy2:
+                        case LzoState.SmallCopy3:
+                            read = SmallCopy(buffer, offset, count);
+                            break;
+                        case LzoState.LargeCopy:
+                            read = LargeCopy(buffer, offset, count);
+                            break;
+                        default:
+                            throw new ArgumentOutOfRangeException();
+                    }
+                    break;
+                }
+                case 1://Instruction < 32
+                {
+                    /*
+                     * 0 0 0 1 H L L L  (16..31)
+                     * Copy of a block within 16..48kB distance (preferably less than 10B)
+                     * length = 2 + (L ?: 7 + (zero_bytes * 255) + non_zero_byte)
+                     * Always followed by exactly one LE16 :  D D D D D D D D : D D D D D D S S
+                     * distance = 16384 + (H << 14) + D
+                     * state = S (copy S literals after this block)
+                     * End of stream is reached if distance == 16384
+                     */
+                    int length;
+                    var l = Instruction & 0x7;
+                    if (l == 0)
+                    {
+                        length = 2 + 7 + ReadLength();
+                    }
+                    else
+                    {
+                        length = 2 + l;
+                    }
+                    var s = Source.ReadByte();
+                    var d = Source.ReadByte();
+                    if (s != -1 && d != -1)
+                    {
+                        d = ((d << 8) | s) >> 2;
+                        var distance = 16384 + ((Instruction & 0x8) << 11) | d;
+                        if (distance == 16384)
+                            return -1;
+
+                        read = CopyFromRingBuffer(buffer, offset, count, distance, length, s & 0x3);
                         break;
                     }
-                    case LzoState.SmallCopy1:
-                    case LzoState.SmallCopy2:
-                    case LzoState.SmallCopy3:
-                        read = SmallCopy(buffer, offset, count);
-                        break;
-                    case LzoState.LargeCopy:
-                        read = LargeCopy(buffer, offset, count);
-                        break;
-                    default:
-                        throw new ArgumentOutOfRangeException();
-                }
-            }
-            else if (Instruction < 32)
-            {
-                /*
-                 * 0 0 0 1 H L L L  (16..31)
-                 * Copy of a block within 16..48kB distance (preferably less than 10B)
-                 * length = 2 + (L ?: 7 + (zero_bytes * 255) + non_zero_byte)
-                 * Always followed by exactly one LE16 :  D D D D D D D D : D D D D D D S S
-                 * distance = 16384 + (H << 14) + D
-                 * state = S (copy S literals after this block)
-                 * End of stream is reached if distance == 16384
-                 */
-                int length;
-                var l = Instruction & 0x7;
-                if (l == 0)
-                {
-                    length = 2 + 7 + ReadLength();
-                }
-                else
-                {
-                    length = 2 + l;
-                }
-                var s = Source.ReadByte();
-                if (s == -1)
                     throw new EndOfStreamException();
-                var d = Source.ReadByte();
-                if (d == -1)
-                    throw new EndOfStreamException();
-                d = ((d << 8) | s) >> 2;
-                var distance = 16384 + ((Instruction & 0x8) << 11) | d;
-                if (distance == 16384)
-                    return -1;
-
-                read = CopyFromRingBuffer(buffer, offset, count, distance, length, s & 0x3);
-            }
-            else if (Instruction < 64)
-            {
-                /*
-                 * 0 0 1 L L L L L  (32..63)
-                 * Copy of small block within 16kB distance (preferably less than 34B)
-                 * length = 2 + (L ?: 31 + (zero_bytes * 255) + non_zero_byte)
-                 * Always followed by exactly one LE16 :  D D D D D D D D : D D D D D D S S
-                 * distance = D + 1
-                 * state = S (copy S literals after this block)
-                 */
-                int length;
-                var l = Instruction & 0x1f;
-                if (l == 0)
+                }
+                case 2://Instruction < 48
+                case 3://Instruction < 64
                 {
+                    /*
+                     * 0 0 1 L L L L L  (32..63)
+                     * Copy of small block within 16kB distance (preferably less than 34B)
+                     * length = 2 + (L ?: 31 + (zero_bytes * 255) + non_zero_byte)
+                     * Always followed by exactly one LE16 :  D D D D D D D D : D D D D D D S S
+                     * distance = D + 1
+                     * state = S (copy S literals after this block)
+                     */
+                    int length;
+                    var l = Instruction & 0x1f;
+                    if (l == 0)
+                    {
                     length = 2 + 31 + ReadLength();
+                    }
+                    else
+                    {
+                        length = 2 + l;
+                    }
+                    var s = Source.ReadByte();
+                    var d = Source.ReadByte();
+                    if (s != -1 && d != -1)
+                    {
+                        d = ((d << 8) | s) >> 2;
+                        var distance = d + 1;
+
+                        read = CopyFromRingBuffer(buffer, offset, count, distance, length, s & 0x3);
+                        break;
+                    }
+                    throw new EndOfStreamException();
                 }
-                else
+                case 4://Instruction < 80
+                case 5://Instruction < 96
+                case 6://Instruction < 112
+                case 7://Instruction < 128
                 {
-                    length = 2 + l;
+                    /*
+                     * 0 1 L D D D S S  (64..127)
+                     * Copy 3-4 bytes from block within 2kB distance
+                     * state = S (copy S literals after this block)
+                     * length = 3 + L
+                     * Always followed by exactly one byte : H H H H H H H H
+                     * distance = (H << 3) + D + 1
+                     */
+                    var length = 3 + ((Instruction >> 5) & 0x1);
+                    var result = Source.ReadByte();
+                    if (result != -1)
+                    {
+                        var distance = (result << 3) + ((Instruction >> 2) & 0x7) + 1;
+
+                        read = CopyFromRingBuffer(buffer, offset, count, distance, length, Instruction & 0x3);
+                        break;
+                    }
+                    throw new EndOfStreamException();
                 }
-                var s = Source.ReadByte();
-                if (s == -1)
-                    throw new EndOfStreamException();
-                var d = Source.ReadByte();
-                if (d == -1)
-                    throw new EndOfStreamException();
-                d = ((d << 8) | s) >> 2;
-                var distance = d + 1;
+                default:
+                {
+                    /*
+                     * 1 L L D D D S S  (128..255)
+                     * Copy 5-8 bytes from block within 2kB distance
+                     * state = S (copy S literals after this block)
+                     * length = 5 + L
+                     * Always followed by exactly one byte : H H H H H H H H
+                     * distance = (H << 3) + D + 1
+                     */
+                    var length = 5 + ((Instruction >> 5) & 0x3);
+                    var result = Source.ReadByte();
+                    if (result != -1)
+                    {
+                        var distance = (result << 3) + ((Instruction & 0x1c) >> 2) + 1;
 
-                read = CopyFromRingBuffer(buffer, offset, count, distance, length, s & 0x3);
+                        read = CopyFromRingBuffer(buffer, offset, count, distance, length, Instruction & 0x3);
+                        break;
+                    }
+                    throw new EndOfStreamException();
+                }
             }
-            else if (Instruction < 128)
-            {
-                /*
-                 * 0 1 L D D D S S  (64..127)
-                 * Copy 3-4 bytes from block within 2kB distance
-                 * state = S (copy S literals after this block)
-                 * length = 3 + L
-                 * Always followed by exactly one byte : H H H H H H H H
-                 * distance = (H << 3) + D + 1
-                 */
-                var length = 3 + ((Instruction >> 5) & 0x1);
-                var result = Source.ReadByte();
-                if (result == -1)
-                    throw new EndOfStreamException();
-                var distance = (result << 3) + ((Instruction >> 2) & 0x7) + 1;
-
-                read = CopyFromRingBuffer(buffer, offset, count, distance, length, Instruction & 0x3);
-            }
-            else
-            {
-                /*
-                 * 1 L L D D D S S  (128..255)
-                 * Copy 5-8 bytes from block within 2kB distance
-                 * state = S (copy S literals after this block)
-                 * length = 5 + L
-                 * Always followed by exactly one byte : H H H H H H H H
-                 * distance = (H << 3) + D + 1
-                 */
-                var length = 5 + ((Instruction >> 5) & 0x3);
-                var result = Source.ReadByte();
-                if (result == -1)
-                    throw new EndOfStreamException();
-                var distance = (result << 3) + ((Instruction & 0x1c) >> 2) + 1;
-
-                read = CopyFromRingBuffer(buffer, offset, count, distance, length, Instruction & 0x3);
-            }
-
             Instruction = Source.ReadByte();
-            if (Instruction == -1)
-                throw new EndOfStreamException();
-            OutputPosition += read;
-            return read;
+            if (Instruction != -1)
+            {
+                OutputPosition += read;
+                return read;
+            }
+            throw new EndOfStreamException();
         }
 
         private int LargeCopy(byte[] buffer, int offset, int count)
@@ -296,11 +314,13 @@ namespace lzo.net
              * distance = (H << 2) + D + 2049
              */
             var result = Source.ReadByte();
-            if (result == -1)
-                throw new EndOfStreamException();
-            var distance = (result << 2) + ((Instruction & 0xc) >> 2) + 2049;
+            if (result != -1)
+            {
+                var distance = (result << 2) + ((Instruction & 0xc) >> 2) + 2049;
 
-            return CopyFromRingBuffer(buffer, offset, count, distance, 3, Instruction & 0x3);
+                return CopyFromRingBuffer(buffer, offset, count, distance, 3, Instruction & 0x3);
+            }
+            throw new EndOfStreamException();
         }
 
         private int SmallCopy(byte[] buffer, int offset, int count)
@@ -319,12 +339,14 @@ namespace lzo.net
              * distance = (H << 2) + D + 1
              */
             var h = Source.ReadByte();
-            if (h == -1)
-                throw new EndOfStreamException();
+            if (h != -1)
+            {
+                var distance = (h << 2) + ((Instruction & 0xc) >> 2) + 1;
 
-            var distance = (h << 2) + ((Instruction & 0xc) >> 2) + 1;
+                return CopyFromRingBuffer(buffer, offset, count, distance, 2, Instruction & 0x3);
+            }
 
-            return CopyFromRingBuffer(buffer, offset, count, distance, 2, Instruction & 0x3);
+            throw new EndOfStreamException();
         }
 
         private int ReadLength()
@@ -339,69 +361,64 @@ namespace lzo.net
                 }
                 length += 255;
             }
-            if (b == -1)
-                throw new EndOfStreamException();
-            return length + b;
+            if (b != -1) return length + b;
+            throw new EndOfStreamException();
         }
 
         private int CopyFromRingBuffer(byte[] buffer, int offset, int count, int distance, int copy, int state)
         {
             Debug.Assert(copy >= 0);
             var result = copy + state;
-            if (count < result)
-            {
-                if (count <= copy)
-                {
-                    CopyFromRingBuffer(buffer, offset, count, distance, count, 0);
-                    DecodedBuffer = new byte[result - count];
-                    CopyFromRingBuffer(DecodedBuffer, 0, DecodedBuffer.Length, distance, copy - count, state);
-                    return count;
-                }
-                else
-                {
-                    CopyFromRingBuffer(buffer, offset, count, distance, copy, 0);
-                    var remaining = count - copy;
-                    DecodedBuffer = new byte[state - remaining];
-                    Copy(buffer, offset + copy, remaining);
-                    Copy(DecodedBuffer, 0, state - remaining);
-                    State = (LzoState)state;
-                    return count;
-                }
-            }
-            
-            var size = copy;
-            if (copy > distance)
-            {
-                size = distance;
-                RingBuffer.Copy(buffer, offset, distance, size);
-                copy -= size;
-                var copies = copy / distance;
-                for (int i = 0; i < copies; i++)
-                {
-                    Buffer.BlockCopy(buffer, offset, buffer, offset + size, size);
-                    offset += size;
-                    copy -= size;
-                }
-                if (copies > 0)
-                {
-                    var length = size * copies;
-                    RingBuffer.Write(buffer, offset - length, length);
-                }
-                offset += size;
-            }
-            if (copy > 0)
-            {
-                if (copy < size)
-                    size = copy;
-                RingBuffer.Copy(buffer, offset, distance, size);
-                offset += size;
-            }
-            if (state > 0)
-            {
-                Copy(buffer, offset, state);
-            }
             State = (LzoState)state;
-            return result;
+            if (count >= result)
+            {
+                var size = copy;
+                if (copy > distance)
+                {
+                    size = distance;
+                    RingBuffer.Copy(buffer, offset, distance, size);
+                    copy -= size;
+                    var copies = copy / distance;
+                    for (int i = 0; i < copies; i++)
+                    {
+                        Buffer.BlockCopy(buffer, offset, buffer, offset + size, size);
+                        offset += size;
+                        copy -= size;
+                    }
+                    if (copies > 0)
+                    {
+                        var length = size * copies;
+                        RingBuffer.Write(buffer, offset - length, length);
+                    }
+                    offset += size;
+                }
+                if (copy > 0)
+                {
+                    if (copy < size)
+                        size = copy;
+                    RingBuffer.Copy(buffer, offset, distance, size);
+                    offset += size;
+                }
+                if (state > 0)
+                {
+                    Copy(buffer, offset, state);
+                }
+                return result;
+            }
+
+            if (count <= copy)
+            {
+                CopyFromRingBuffer(buffer, offset, count, distance, count, 0);
+                DecodedBuffer = new byte[result - count];
+                CopyFromRingBuffer(DecodedBuffer, 0, DecodedBuffer.Length, distance, copy - count, state);
+                return count;
+            }
+            CopyFromRingBuffer(buffer, offset, count, distance, copy, 0);
+            var remaining = count - copy;
+            DecodedBuffer = new byte[state - remaining];
+            Copy(buffer, offset + copy, remaining);
+            Copy(DecodedBuffer, 0, state - remaining);
+            return count;
         }
 
         private int ReadInternal(byte[] buffer, int offset, int count)
@@ -410,36 +427,33 @@ namespace lzo.net
             if (_length.HasValue && OutputPosition >= _length)
                 return -1;
             int read;
-            if (DecodedBuffer != null)
+            if (DecodedBuffer == null)
             {
-                var decodedLength = DecodedBuffer.Length;
-                if (count > decodedLength)
-                {
-                    Buffer.BlockCopy(DecodedBuffer, 0, buffer, offset, decodedLength);
-                    DecodedBuffer = null;
-                    OutputPosition += decodedLength;
-                    return decodedLength;
-                }
-                Buffer.BlockCopy(DecodedBuffer, 0, buffer, offset, count);
-                if (decodedLength > count)
-                {
-                    var remaining = new byte[decodedLength - count];
-                    Buffer.BlockCopy(DecodedBuffer, count, remaining, 0, remaining.Length);
-                    DecodedBuffer = remaining;
-                }
-                else
-                {
-                    DecodedBuffer = null;
-                }
-                OutputPosition += count;
-                return count;
-            }
-            if ((read = Decode(buffer, offset, count)) < 0)
-            {
+                if ((read = Decode(buffer, offset, count)) >= 0) return read;
                 _length = OutputPosition;
                 return -1;
             }
-            return read;
+            var decodedLength = DecodedBuffer.Length;
+            if (count > decodedLength)
+            {
+                Buffer.BlockCopy(DecodedBuffer, 0, buffer, offset, decodedLength);
+                DecodedBuffer = null;
+                OutputPosition += decodedLength;
+                return decodedLength;
+            }
+            Buffer.BlockCopy(DecodedBuffer, 0, buffer, offset, count);
+            if (decodedLength > count)
+            {
+                var remaining = new byte[decodedLength - count];
+                Buffer.BlockCopy(DecodedBuffer, count, remaining, 0, remaining.Length);
+                DecodedBuffer = remaining;
+            }
+            else
+            {
+                DecodedBuffer = null;
+            }
+            OutputPosition += count;
+            return count;
         }
 
         #region wrapped stream methods
