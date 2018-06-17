@@ -346,13 +346,27 @@ namespace lzo.net
 
         private int CopyFromRingBuffer(byte[] buffer, int offset, int count, int distance, int copy, int state)
         {
-            Debug.Assert(copy > 0);
+            Debug.Assert(copy >= 0);
             var result = copy + state;
             if (count < result)
             {
-                DecodedBuffer = new byte[result];
-                CopyFromRingBuffer(DecodedBuffer, 0, DecodedBuffer.Length, distance, copy, state);
-                return 0;
+                if (count <= copy)
+                {
+                    CopyFromRingBuffer(buffer, offset, count, distance, count, 0);
+                    DecodedBuffer = new byte[result - count];
+                    CopyFromRingBuffer(DecodedBuffer, 0, DecodedBuffer.Length, distance, copy - count, state);
+                    return count;
+                }
+                else
+                {
+                    CopyFromRingBuffer(buffer, offset, count, distance, copy, 0);
+                    var remaining = count - copy;
+                    DecodedBuffer = new byte[state - remaining];
+                    Copy(buffer, offset + copy, remaining);
+                    Copy(DecodedBuffer, 0, state - remaining);
+                    State = (LzoState)state;
+                    return count;
+                }
             }
             
             var size = copy;
