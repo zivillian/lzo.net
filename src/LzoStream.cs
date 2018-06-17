@@ -190,15 +190,10 @@ namespace lzo.net
                      * state = S (copy S literals after this block)
                      * End of stream is reached if distance == 16384
                      */
-                    int length;
-                    var l = Instruction & 0x7;
-                    if (l == 0)
+                    int length = (Instruction & 0x7) + 2;
+                    if (length == 2)
                     {
-                        length = 2 + 7 + ReadLength();
-                    }
-                    else
-                    {
-                        length = 2 + l;
+                        length += 7 + ReadLength();
                     }
                     var s = Source.ReadByte();
                     var d = Source.ReadByte();
@@ -225,15 +220,10 @@ namespace lzo.net
                      * distance = D + 1
                      * state = S (copy S literals after this block)
                      */
-                    int length;
-                    var l = Instruction & 0x1f;
-                    if (l == 0)
+                    int length = (Instruction & 0x1f) + 2;
+                    if (length == 2)
                     {
-                    length = 2 + 31 + ReadLength();
-                    }
-                    else
-                    {
-                        length = 2 + l;
+                        length += 31 + ReadLength();
                     }
                     var s = Source.ReadByte();
                     var d = Source.ReadByte();
